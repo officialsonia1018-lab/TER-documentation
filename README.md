@@ -123,8 +123,10 @@ ter-documentation-portal/
     vite.svg
   server/
     api.js            (API routes: auth, modules, images, database tools)
-    index.js          (Node HTTP server: api.js + legacy uploads + dist/, started by npm start)
+    index.js          (Node HTTP server: api.js + legacy uploads + dist/, CORS, npm start)
     store.js          (MariaDB storage, sessions, images in module_images)
+  vercel.json         (Vite preset + SPA rewrites for frontend-only Vercel hosting)
+  .env.example        (template for VITE_API_BASE_URL and backend variables)
   data/               (local only, gitignored)
     uploads/          (legacy image files from earlier versions)
     ter-portal.db     (old SQLite file - only read once to import into MySQL)
@@ -408,6 +410,8 @@ Configuration (environment variables):
 | `DB_SSL` | *(off)* | Set to `1` for TLS. **Required** for most managed MySQL hosts (e.g. Aiven used with Render) |
 | `DATA_DIR` | `./data` | Legacy image folder and the old SQLite backup (not needed on Render) |
 | `UPLOADS_DIR` | `<DATA_DIR>/uploads` | Legacy image folder |
+| `CORS_ORIGIN` | `*` | Allowed frontend origins for the API (comma-separated), e.g. your Vercel URL |
+| `VITE_API_BASE_URL` | *(empty)* | Frontend build-time API URL. Empty = same origin (local proxy or combined Render). Set to the Render URL on Vercel |
 
 On Windows PowerShell, set a variable for one session before `npm run server`, for example:
 
@@ -459,9 +463,14 @@ In the running portal: open `/login`, sign in as the admin and use **Add Card**.
 
 ## 14. Deploying the portal
 
-The backend stays a normal, long-running **Node.js process**: `server/index.js` builds the API, serves the built React site (`dist/`) and listens on the port given by the host. `npm start` is all Render needs; no serverless functions. Both the backend and the database are external to the frontend.
+The backend stays a normal, long-running **Node.js process**: `server/index.js` builds the API, serves the built React site (`dist/`) and listens on the port given by the host. `npm start` is all Render needs; no serverless functions.
 
-### 14.1 Render + a managed MySQL database (recommended)
+Two layouts are supported:
+
+- **14.1:** one Render Web Service for the frontend **and** the API (simplest).
+- **14.2:** Vercel (frontend) + Render (backend/API) + a managed MySQL database. The frontend calls the Render API through `VITE_API_BASE_URL`, and Render allows the Vercel origin through `CORS_ORIGIN`.
+
+### 14.1 Render + a managed MySQL database (combined, smallest setup)
 
 Render runs the Node app, but **not MySQL**. Create the database with a hosted provider, then connect Render to it:
 
@@ -506,6 +515,7 @@ Steps:
    | `DB_SSL` | `1` for most managed MySQL hosts |
    | `ADMIN_EMAIL` | your admin email |
    | `ADMIN_PASSWORD` | a strong password (do not keep `admin123`) |
+   | `CORS_ORIGIN` | only needed for a separate frontend (see 14.2); leave unset here |
 
    Do **not** set `PORT` - Render provides it automatically.
 5. **Save and deploy.** Render installs dependencies, runs `npm run build`, then `npm start`; later pushes to `main` redeploy automatically. Environment changes also trigger a redeploy.
@@ -520,7 +530,28 @@ Render notes:
 - On the first start an empty database is seeded with the built-in 30 modules, so import your dump first to keep your edits and images.
 - For MySQL, the Render service must be able to reach the database host: allow Render's outbound connections (Aiven and most providers do by default) or use your company's server with the required firewall rule.
 
-### 14.2 Your own server (VPS, Windows machine, company host)
+### 14.2 Vercel frontend + Render backend + managed MySQL (split setup)
+
+Use this when the React site must be on Vercel and the API on Render. Vercel hosts only the static build; the database and API stay on Render.
+
+1. **Deploy the backend on Render first**, exactly as in 14.1 (Web Service, `npm start`, MySQL variables, imported dump). Note the service URL, e.g. `https://ter-backend.onrender.com`.
+2. **Allow the Vercel origin in Render.** In the Render service → Environment add:
+   ```
+   CORS_ORIGIN=https://your-vercel-app.vercel.app
+   ```
+   Several origins are allowed separated by commas. `*` works but is less restrictive.
+3. **Connect the repo to Vercel:** vercel.com → **Add New → Project** → import the same GitHub repo. Vercel reads `vercel.json` (Vite preset, `npm run build`, output `dist`, SPA rewrites), so deep links like `/module/...` and `/database` open correctly.
+4. **Set the API URL on Vercel** (Project → Settings → Environment Variables):
+   ```
+   VITE_API_BASE_URL=https://ter-backend.onrender.com
+   ```
+   Vite bakes this value in at build time, so **redeploy after changing it** (Deployments → Redeploy).
+5. **Redeploy Render** after adding `CORS_ORIGIN` (saving the variable triggers a deploy). Then open the Vercel URL, sign in, and save a card - requests go to the Render API and images load from `/api/images/<id>` on Render.
+6. **Troubleshooting the split:** a browser error "blocked by CORS policy" means the Vercel URL is not in `CORS_ORIGIN` (or Render was not redeployed). If the site shows demo data, `VITE_API_BASE_URL` was empty at build time - set it and redeploy.
+
+Note: Vercel only serves the frontend here. `/api/*` does not exist on Vercel, which is why the base URL must point to Render.
+
+### 14.3 Your own server (VPS, Windows machine, company host)
 
 1. Build the frontend with `npm run build`.
 2. Provide a **MySQL / MariaDB** server and set `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` (add `DB_SSL=1` if the server uses TLS).
@@ -580,6 +611,8 @@ If you want the project on `D:\ter-documentation-portal`:
 | Render API returns 500 / database errors | Check Render → Logs and the `DB_*` variables; managed MySQL usually needs `DB_SSL=1`. Confirm the database host allows connections from Render. |
 | Render app sleeps / first visit is slow | Expected on the free plan: the instance sleeps after 15 minutes without traffic and takes 30-60 seconds to wake up. |
 | `ER_ACCESS_DENIED` or `Cannot connect to MySQL` on Render | Fix the environment variables, then save - Render redeploys automatically and the new values are picked up. |
+| Browser shows "blocked by CORS policy" with Vercel + Render | Add the Vercel URL to Render's `CORS_ORIGIN`, save (Render redeploys), then reload. |
+| Vercel site shows demo data / images do not load | `VITE_API_BASE_URL` was empty when the frontend was built. Set it to the Render URL and redeploy on Vercel. |
 | Port 5173 already in use | Vite picks the next free port automatically; check the terminal output for the actual URL. Or run `npm run dev -- --port 3000`. |
 | Tailwind classes do not apply | Make sure `@tailwindcss/vite` is in `vite.config.js`, `tailwindcss` is installed, and `src/index.css` starts with `@import "tailwindcss";` and is imported in `src/main.jsx`. |
 | Blank page after login | Open the browser console. A blank page usually means a JavaScript error - check the terminal running Vite for the stack trace. |

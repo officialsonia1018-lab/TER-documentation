@@ -1,4 +1,5 @@
 import ScreenshotPlaceholder from './ScreenshotPlaceholder.jsx';
+import { apiUrl } from '../../services/api.js';
 
 // One documentation section: title, paragraphs, bullet list and optional screenshot placeholder.
 
@@ -34,7 +35,7 @@ export default function DocumentationSection({ id, section }) {
       {section.image ? (
         <figure className="mt-4">
           <img
-            src={section.image}
+            src={apiUrl(section.image)}
             alt={section.title ? `${section.title} illustration` : 'Documentation illustration'}
             className="w-full rounded-lg border border-slate-200 object-cover"
             loading="lazy"

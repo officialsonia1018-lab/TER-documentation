@@ -27,6 +27,7 @@ pnpm-debug.log*
 # Env
 .env
 .env.*
+!.env.example
 
 # Portal server data (SQLite database and uploaded images) - root folder only,
 # not src/data which is part of the app source

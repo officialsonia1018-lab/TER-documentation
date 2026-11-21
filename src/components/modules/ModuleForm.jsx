@@ -6,6 +6,7 @@ import { MODULE_CATEGORIES } from '../../data/terModules.js';
 import { TER_APP_URL } from '../../data/appLinks.js';
 import { ROLES } from '../../data/roles.js';
 import { imageFileToDataUrl } from '../../utils/imageFile.js';
+import { apiUrl } from '../../services/api.js';
 
 // Form used by AddModule and EditModule. Steps, rules and workflow are entered
 // one per line and converted to arrays on submit. Content sections are edited
@@ -453,7 +454,7 @@ export default function ModuleForm({ initialValues, submitLabel = 'Save module',
                 {section.image ? (
                   <div className="space-y-2">
                     <img
-                      src={section.image}
+                      src={apiUrl(section.image)}
                       alt={`Preview for section ${index + 1}`}
                       className="h-40 w-full rounded-lg border border-slate-200 object-cover"
                     />

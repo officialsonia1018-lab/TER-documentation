@@ -3,6 +3,20 @@
 
 const TOKEN_KEY = 'ter-portal-api-token';
 
+// Empty in local development and on the combined Render deployment (same
+// origin). Set VITE_API_BASE_URL on Vercel to the Render backend URL.
+const API_BASE_URL = String(import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
+
+export function apiUrl(path) {
+  if (!path || typeof path !== 'string') {
+    return path;
+  }
+  if (/^(?:https?:|data:|blob:)/i.test(path)) {
+    return path;
+  }
+  return `${API_BASE_URL}${path.startsWith('/') ? path : `/${path}`}`;
+}
+
 export class ApiError extends Error {
   constructor(message, status) {
     super(message);
@@ -42,7 +56,7 @@ async function request(pathname, options = {}) {
 
   let response;
   try {
-    response = await fetch(pathname, { ...options, headers });
+    response = await fetch(apiUrl(pathname), { ...options, headers });
   } catch {
     throw new ApiError('Cannot reach the portal server.', 0);
   }

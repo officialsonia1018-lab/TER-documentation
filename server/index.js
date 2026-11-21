@@ -11,6 +11,26 @@ const port = Number(process.env.PORT || 3001);
 
 const UPLOAD_NAME = /^[a-f0-9-]+\.(jpg|png|webp)$/i;
 
+// Comma-separated list of allowed frontend origins, e.g. the Vercel URL.
+// Default "*" because the API uses Bearer tokens (no cookies).
+const corsOrigins = (process.env.CORS_ORIGIN || '*')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+function applyCors(request, response) {
+  const origin = request.headers.origin;
+  if (corsOrigins.includes('*')) {
+    response.setHeader('Access-Control-Allow-Origin', '*');
+  } else if (origin && corsOrigins.includes(origin)) {
+    response.setHeader('Access-Control-Allow-Origin', origin);
+    response.setHeader('Vary', 'Origin');
+  }
+  response.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, POST, PUT, PATCH, DELETE, OPTIONS');
+  response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  response.setHeader('Access-Control-Max-Age', '86400');
+}
+
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -45,6 +65,13 @@ function sendFile(response, filePath, cacheControl = 'no-cache') {
 
 function handleRequest(request, response) {
   const url = new URL(request.url || '/', `http://${request.headers.host || 'localhost'}`);
+
+  applyCors(request, response);
+  if (request.method === 'OPTIONS') {
+    response.writeHead(204);
+    response.end();
+    return;
+  }
 
   Promise.resolve()
     .then(async () => {
