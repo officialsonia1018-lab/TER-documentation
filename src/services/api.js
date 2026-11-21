@@ -61,6 +61,15 @@ async function request(pathname, options = {}) {
     throw new ApiError('Cannot reach the portal server.', 0);
   }
 
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    // The static host answered with index.html because no API runs there.
+    throw new ApiError(
+      'The portal server returned a page instead of API data. Check VITE_API_BASE_URL.',
+      response.status
+    );
+  }
+
   let data = {};
   try {
     data = await response.json();
@@ -76,6 +85,9 @@ async function request(pathname, options = {}) {
 
 export async function fetchModules() {
   const data = await request('/api/modules');
+  if (!Array.isArray(data.modules)) {
+    throw new ApiError('The portal server returned invalid data.', 0);
+  }
   return data.modules;
 }
 
